@@ -24,7 +24,7 @@ It follows this general agenda:
 1. [Porting Applications](./03-porting-applications.ipynb)
 1. [GPU Architecture](./04-gpu-architecture.ipynb)
 1. [Reductions](./05-reductions.ipynb)
-1. [Outlook](./06-outlook.ipynb)
+1. [Summary & Outlook](./06-summary-outlook.ipynb)
 
 ## Start
 
