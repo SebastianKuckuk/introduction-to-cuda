@@ -1,6 +1,7 @@
 import argparse
 import os
 import pathlib
+import re
 import subprocess
 
 from IPython import get_ipython
@@ -17,6 +18,13 @@ class ICEMagic(magic.Magics):
     @staticmethod
     def create_path_for_file(file):
         pathlib.Path(file[:file.rindex(os.path.sep)]).mkdir(parents=True, exist_ok=True)
+
+
+    @staticmethod
+    def strip_nsys_progress(text):
+        # nsys falls back from a self-overwriting `\r` progress bar to one line per tick
+        # once its stdout is a pipe rather than a terminal, e.g. "[2/6] [ 50%    ] report1.sqlite"
+        return '\n'.join(l for l in text.split('\n') if not re.match(r'^\[\d+/\d+\]\s*\[', l))
 
 
     def __init__(self, shell):
@@ -124,8 +132,10 @@ std::cout << "Total time: " << 1e3 * (end - start) << " ms" << std::endl;'''
             print(f'Compiling with   {" ".join(cmdline)}')
 
         try:
-            subprocess.check_call(cmdline)
+            result = subprocess.run(cmdline, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True)
+            print(result.stdout, end='')
         except subprocess.CalledProcessError as e:
+            print(e.output, end='')
             print(f'Compilation failed with error code {e.returncode}')
             return
 
@@ -138,31 +148,27 @@ std::cout << "Total time: " << 1e3 * (end - start) << " ms" << std::endl;'''
             bin_call = ['nsys', 'profile', '--stats=true', '--trace=cuda'] + add_args + bin_call
 
         # execute binary
-        if 0 == len(self.args.env):
-            if self.args.verbose:
-                print(f'Executing        {" ".join(bin_call)}')
-                print()
-
-            try:
-                subprocess.check_call(bin_call)
-            except subprocess.CalledProcessError as e:
-                print(f'Execution failed with error code {e.returncode}')
-                return
-        else:
+        env = None
+        if 0 != len(self.args.env):
             env = os.environ.copy()
             for e in self.args.env:
                 var, val = e.split('=')
                 env[var] = val
 
-            if self.args.verbose:
-                print(f'Executing        {" ".join(self.args.env)} {" ".join(bin_call)}')
-                print()
+        if self.args.verbose:
+            env_prefix = f'{" ".join(self.args.env)} ' if env else ''
+            print(f'Executing        {env_prefix}{" ".join(bin_call)}')
+            print()
 
-            try:
-                subprocess.check_call(bin_call, env=env)
-            except subprocess.CalledProcessError as e:
-                print(f'Execution failed with error code {e.returncode}')
-                return
+        try:
+            result = subprocess.run(bin_call, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True)
+            output = __class__.strip_nsys_progress(result.stdout) if self.args.profile else result.stdout
+            print(output, end='')
+        except subprocess.CalledProcessError as e:
+            output = __class__.strip_nsys_progress(e.output) if self.args.profile else e.output
+            print(output, end='')
+            print(f'Execution failed with error code {e.returncode}')
+            return
 
 
     def ice(self, line, cell, parser_case):
