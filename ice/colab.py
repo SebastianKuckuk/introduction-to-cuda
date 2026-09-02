@@ -3,7 +3,9 @@ import subprocess
 import sys
 
 
-INSTALL_NSYS = '''
+NSYS_PACKAGE = 'nsight-systems-cli-2026.1.1'
+
+INSTALL_NSYS = f'''
 export DEBIAN_FRONTEND=noninteractive
 
 key=/etc/apt/trusted.gpg.d/nvidia-devtools.gpg
@@ -16,7 +18,7 @@ echo "deb [signed-by=$key] $repo /" > $list
 # restrict the update to the repository just added - the other sources are up to date already and
 # refreshing all of them is slow and prints warnings that have nothing to do with this course
 apt-get update -qq -o Dir::Etc::sourcelist=$list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
-apt-get install -y -qq nsight-systems-cli
+apt-get install -y -qq {NSYS_PACKAGE}
 '''
 
 
@@ -41,3 +43,7 @@ def setup(profiling=False):
     print(f'GPU                {gpu.stdout.strip()}')
     for tool in ['nvcc', 'nsys', 'compute-sanitizer', 'cuda-gdb']:
         print(f'{tool:19}{shutil.which(tool) or "not installed"}')
+
+    if profiling and shutil.which('nsys'):
+        version = subprocess.run(['nsys', '--version'], capture_output=True, text=True).stdout.split()[-1]
+        print(f'\nOpen the reports generated in this notebook with a local installation of Nsight Systems {version} or newer')
